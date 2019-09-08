@@ -12,10 +12,12 @@ import (
 	"unsafe"
 )
 
+// Decoder represents rencoder decoder
 type Decoder struct {
 	r *bufio.Reader
 }
 
+// Decode decodes stream
 func (d *Decoder) Decode(v interface{}) error {
 	vv := reflect.ValueOf(v)
 	if vv.Kind() != reflect.Ptr || vv.IsNil() {
@@ -429,6 +431,7 @@ func bytesAsString(b []byte) string {
 	}))
 }
 
+// DecodeTypeError represents decode type error
 type DecodeTypeError struct {
 	Value string
 	Type  reflect.Type
@@ -438,6 +441,7 @@ func (e *DecodeTypeError) Error() string {
 	return fmt.Sprintf("cannot decode a rencode %s into a %s", e.Value, e.Type)
 }
 
+// DecodeInvalidArgError represents decode invalid argument error
 type DecodeInvalidArgError struct {
 	Type reflect.Type
 }

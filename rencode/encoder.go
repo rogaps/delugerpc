@@ -10,10 +10,12 @@ import (
 	"sort"
 )
 
+// Encoder represents rencode encoder
 type Encoder struct {
 	w io.Writer
 }
 
+// Encode encodes value
 func (e *Encoder) Encode(v interface{}) error {
 	switch v.(type) {
 	case nil:

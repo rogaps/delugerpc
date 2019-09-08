@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/rpc"
 	"reflect"
+	"strings"
 
 	"github.com/rogaps/delugerpc/rencode"
 )
@@ -26,26 +27,19 @@ type clientCodec struct {
 	respBody interface{}
 }
 
-type ArgsKwargs struct {
-	Args   []interface{}
-	Kwargs map[string]interface{}
-}
-
 func (c *clientCodec) WriteRequest(r *rpc.Request, body interface{}) error {
 	var b bytes.Buffer
+	var msg []interface{}
+	var req []interface{}
+
 	zw := zlib.NewWriter(&b)
 	e := rencode.NewEncoder(zw)
 
-	argsKwrgs, ok := body.(ArgsKwargs)
-	if !ok {
-		argsKwrgs = ArgsKwargs{}
-	}
-	var msg []interface{}
-	var reqMsg []interface{}
-	reqMsg = append(reqMsg, r.Seq, r.ServiceMethod, argsKwrgs.Args, argsKwrgs.Kwargs)
-	msg = append(msg, reqMsg)
+	args, kwargs := getArgs(body)
+	msg = append(msg, r.Seq, r.ServiceMethod, args, kwargs)
+	req = append(req, msg)
 
-	if err := e.Encode(msg); err != nil {
+	if err := e.Encode(req); err != nil {
 		return err
 	}
 
@@ -112,6 +106,7 @@ func newDelugeCodec(conn *tls.Conn) rpc.ClientCodec {
 	}
 }
 
+// Dial creates RPC client with rencode codec
 func Dial(network, address string) (*rpc.Client, error) {
 	conn, err := net.Dial(network, address)
 	if err != nil {
@@ -119,7 +114,47 @@ func Dial(network, address string) (*rpc.Client, error) {
 	}
 	tlsConn := tls.Client(conn, &tls.Config{
 		ServerName:         address,
-		InsecureSkipVerify: true, // x509: cannot verify signature: algorithm unimplemented
+		InsecureSkipVerify: true,
 	})
 	return rpc.NewClientWithCodec(newDelugeCodec(tlsConn)), err
+}
+
+func getArgs(body interface{}) (args []interface{}, kwargs map[string]interface{}) {
+	bodyValue := reflect.ValueOf(body)
+	switch bodyValue.Kind() {
+	case reflect.Slice, reflect.Array:
+		for i := 0; i < bodyValue.Len(); i++ {
+			args = append(args, bodyValue.Index(i).Interface())
+		}
+		return
+	case reflect.Map:
+		for _, key := range bodyValue.MapKeys() {
+			if strings.EqualFold("args", key.String()) {
+				argsValue := bodyValue.MapIndex(key)
+				if argsValue.Kind() == reflect.Interface {
+					argsValue = argsValue.Elem()
+				}
+				if argsValue.Kind() == reflect.Slice ||
+					argsValue.Kind() == reflect.Array {
+					for i := 0; i < argsValue.Len(); i++ {
+						args = append(args, argsValue.Index(i).Interface())
+					}
+				}
+			} else if strings.EqualFold("kwargs", key.String()) {
+				kwargsValue := bodyValue.MapIndex(key)
+				if kwargsValue.Kind() == reflect.Interface {
+					kwargsValue = kwargsValue.Elem()
+				}
+				if kwargsValue.Kind() == reflect.Map {
+					kwargs = make(map[string]interface{})
+					for _, key := range kwargsValue.MapKeys() {
+						kwargs[key.String()] = kwargsValue.MapIndex(key).Interface()
+					}
+				}
+			}
+		}
+		return
+	default:
+		return
+	}
 }

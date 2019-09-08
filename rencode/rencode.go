@@ -32,10 +32,12 @@ const (
 	listFixedCount   byte = 64
 )
 
+// NewDecoder returns a new rencode decoder
 func NewDecoder(r io.Reader) *Decoder {
 	return &Decoder{r: bufio.NewReader(r)}
 }
 
+// NewEncoder returns a new rencode encoder
 func NewEncoder(w io.Writer) *Encoder {
 	return &Encoder{w}
 }
